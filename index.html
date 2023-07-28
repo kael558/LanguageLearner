@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Application</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+
+</head>
+<body>
+    <div class="tabs">
+        <div class="tab" id="tab1">Conversation Mode</div>
+        <div class="tab" id="tab2">Practice Mode</div>
+    </div>
+    
+    <div id="content-tab1">
+        <div class="chat-dialog">
+            <div class="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="chat-input-field" placeholder="Type a message">
+                <button id="submit-button">Submit</button>
+                <button class="mic-icon", id="recordButtonConversation">🎙️</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="content-tab2" style="display: none;">
+        <h3 id="sentence"></h3>
+        <button class="mic-icon" id="recordButtonPractice">🎙️</button>
+    </div>
+    <script src="index.js"></script>
+</body>
+</html>
