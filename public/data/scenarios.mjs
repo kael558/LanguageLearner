@@ -1,4 +1,4 @@
-[
+const scenarios = [
     {
         "id": 0,
         "title": "Order a baguette from a bakery",
@@ -14,3 +14,5 @@
         "first_message": "Welcome to our customer service. How can I help you?"
     }
 ]
+
+export default scenarios;

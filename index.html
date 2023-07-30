@@ -1,32 +1,52 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My Application</title>
+    <title>Language Learner</title>
     <link rel="stylesheet" type="text/css" href="styles.css">
+    <script src="https://kit.fontawesome.com/ce44f4be69.js" crossorigin="anonymous"></script>
 
 </head>
 <body>
     <div class="tabs">
-        <div class="tab" id="tab1">Conversation Mode</div>
-        <div class="tab" id="tab2">Practice Mode</div>
+        <div class="tab" id="conversation-tab">Conversation Mode</div>
+        <div class="tab" id="practice-tab">Practice Mode</div>
     </div>
     
-    <div id="content-tab1">
-        <div id="scenarios-container"></div>
+    <div id="conversation-tab-content">
+        <div id="scenarios-container">
+            <div id="scenarios"></div>
+        </div>
 
         <div id="chat-container">
-            <div class="chat-messages"></div>
+            <span>
+                <button id="back-to-scenarios-button">Back</button>
+                <button id="reset-scenario-button">Restart</button>
+                <button id="finish-scenario-button">Finish</button>
+            </span>
+
+            <h2 id="scenario-title"></h2>
+            <p id="scenario-description"></p>
+            <div id="chat-messages"></div>
             <div class="chat-input">
                 <input type="text" id="chat-input-field" placeholder="Type a message">
                 <button id="submit-button">Submit</button>
                 <button class="mic-icon", id="recordButtonConversation">🎙️</button>
             </div>
+
+            <div id="notes"></div>
         </div>
     </div>
     
-    <div id="content-tab2" style="display: none;">
-        <h3 id="sentence"></h3>
-        <button class="mic-icon" id="recordButtonPractice">🎙️</button>
+    <div id="practice-tab-content" style="display: none;">
+        <div id="sentences-container">
+            <table id="sentences">
+                <tr>
+                <th>Sentence</th>
+                <th>Record</th>
+                </tr>
+            </table>
+            <button id="finish-practice-button">Finish</button>
+        </div>
     </div>
     <script src="index.js"></script>
 </body>

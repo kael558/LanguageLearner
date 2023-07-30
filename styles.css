@@ -1,20 +1,30 @@
 body {
     font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
 }
 
 .tabs {
     display: flex;
-    justify-content: space-around;
-    margin-bottom: 20px;
+    justify-content: space-evenly;
+    margin-bottom: 0px;
+    width: 100%;
+    border: 3px solid #000000;
 }
 
 .tab {
+    font-size: large;
     padding: 10px;
     cursor: pointer;
 }
 
 .tab:hover {
     background-color: #ddd;
+}
+
+.tab.active {
+    background-color: #cccccc;
 }
 
 
@@ -26,8 +36,24 @@ body {
     height: 400px;
     width: 60%;
     margin: auto;
-    border: 1px solid #ddd;
     padding: 10px;
+    padding-top: 0px;
+}
+
+.scenario {
+    border: 2px solid #ddd;
+    padding: 10px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.scenario-img {
+    width: 300px;
+    height: 300px;
+    border: 3px solid #ddd;
+    padding: 0px;
+    overflow: auto;
 }
 
 #chat-container {
@@ -35,31 +61,92 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    height: 400px;
+    height: 600px;
     width: 60%;
     margin: auto;
-    border: 1px solid #ddd;
+    border: 5px solid #ddd;
     padding: 10px;
 }
 
-.chat-messages {
+#scenario-description {
+    border-bottom: 3px solid #ddd;
+    width: 100%;
+}
+
+#chat-messages {
     width: 100%;
     height: 80%;
-    border: 1px solid #ddd;
-    padding: 10px;
+    padding: 0px;
+    padding-top: 5px;
     overflow: auto;
+    display: flex;
+    flex-direction: column;
+    overflow:auto;
+    padding-right: 30px;
 }
+
+.mic-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.mic-icon.recording {
+    background-color: red;
+}
+
+#notes {
+    flex-direction: column;
+    display: flex;
+}
+
+
+.from-bot {
+    align-self: flex-start;
+    max-width: 80%; /* so the messages don't stretch to full width */
+    background-color: #e5e5ea; /* some color */
+    border-radius: 20px; /* make edges curved */
+    padding: 10px; /* some padding around the text inside the bubble */
+    margin: 5px 0; /* add some vertical spacing between messages */
+    border: 1px solid #ddd;
+}
+
+.from-me {
+    align-self: flex-end;
+    max-width: 80%; /* so the messages don't stretch to full width */
+    background-color: #007bff; /* some color */
+    border-radius: 20px; /* make edges curved */
+    color: #ffffff; /* make the text color white */
+    padding: 10px; /* some padding around the text inside the bubble */
+    margin: 5px 0; /* add some vertical spacing between messages */
+    border: 1px solid #ddd;
+}
+
+.loading:before {
+    content: '.';
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0%, 100% { content: "."; }
+    33% { content: ".."; }
+    66% { content: "..."; }
+}
+
 
 .chat-input {
     width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 30px;
 }
 
 #chat-input-field {
+    height: 25px;
     flex-grow: 1;
-    margin-right: 10px;
+    margin-right: 4px;
 }
 
 .mic-icon {
@@ -79,4 +166,44 @@ body {
 #submit-button {
     margin-left: 5px;
     padding: 5px;
+}
+
+/* Sentences  */
+#sentences-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 600px;
+    width: 60%;
+    margin: auto;
+    border: 5px solid #ddd;
+    padding: 10px;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 20px auto;
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+tr {
+    font-size: 25px;
+}
+
+i.fas {
+    font-size: 18px;
 }

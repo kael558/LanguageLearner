@@ -22,3 +22,22 @@ functions:
   ai: proxy-dev-ai (20 MB)
   tts: proxy-dev-tts (20 MB)
   generation: proxy-dev-generation (20 MB)
+
+
+
+TODO:
+ - make ui for sentences (5 sentences)
+    - record audio and next button
+ - on sentences finish
+    - run mfa
+    - display list on side to navigate
+    - damerau-levenshtein on each word
+    - damerau-levenshtein on each matching word's phonemes
+    - words with lower score are brighter red vs green 
+- Extra features
+    - highlight section of sentence 
+    - crops audio for both human and elevenlabs and puts it side-by-side
+    - phoneme mismatch or stress mismatch
+    - clicking on word shows definition
+
+ffmpeg -i .\test.webm -c:a pcm_f32le .\out.wav
