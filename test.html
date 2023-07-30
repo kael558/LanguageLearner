@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Waveform</title>
+</head>
+<body>
+    <canvas id="waveform"></canvas>
+
+    <script>
+        var context = new AudioContext();
+        var source = null;
+        var audioBuffer = null;
+
+        function startSound(data) {
+            source = context.createBufferSource();
+            context.decodeAudioData(data, function(buffer) {
+                source.buffer = buffer;
+                audioBuffer = buffer;
+                drawWaveform();
+            }, function(e) {
+                console.log('Error decoding file', e);
+            }); 
+
+            source.connect(context.destination);
+            source.start(0);
+        }
+
+        function drawWaveform() {
+            var canvas = document.getElementById('waveform');
+            var canvasContext = canvas.getContext('2d');
+
+            var width = canvas.width;
+            var height = canvas.height;
+
+            var data = audioBuffer.getChannelData(0); // get data for first channel
+            var step = Math.ceil(data.length / width); // define step to iterate over data
+
+            canvasContext.fillStyle = 'black';
+            canvasContext.clearRect(0, 0, width, height);
+
+            for (var i = 0; i < width; i++) {
+                var min = 1.0;
+                var max = -1.0;
+
+                for (var j = 0; j < step; j++) {
+                    var dataIndex = (i * step) + j;
+                    var value = data[dataIndex];
+
+                    if (value > max) {
+                        max = value;
+                    } else if (value < min) {
+                        min = value;
+                    }
+                }
+
+                canvasContext.fillRect(i, (1 + min) * height / 2, 1, Math.max(1, (max - min) * height));
+            }
+        }
+
+        fetch('test.wav') // replace this with your audio file
+            .then(response => response.arrayBuffer())
+            .then(data => startSound(data))
+            .catch(console.error);
+    </script>
+</body>
+</html>

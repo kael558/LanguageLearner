@@ -425,11 +425,13 @@ const recordButton = document.getElementById('recordButtonConversation');
 let gotPermissions = false;
 let chunks = [];
 
-function recordButtonClicked(button, cb, chat_mode = false) {
+function recordButtonClicked(button,  cb, chat_mode = false) {
     if (mediaRecorder && mediaRecorder.state === 'recording' && !button.classList.contains('recording')) { // they clicking another record button
         alert('Already recording!');
         return;
     }
+
+
 
     if (!gotPermissions) {
         navigator.mediaDevices.getUserMedia({ audio: true, video: false })
@@ -444,6 +446,7 @@ function recordButtonClicked(button, cb, chat_mode = false) {
 
                 mediaRecorder.onstop = (event) => {
                     const blob = new Blob(chunks, {type: 'audio/webm'});
+           
                     cb(blob);
    
 
@@ -517,33 +520,47 @@ const sentenceTable = document.querySelector('#sentences');
 const finishPracticeButton = document.querySelector('#finish-practice-button');
 let recordedSentences = [];
 
+
+
+
 sentences[0].sentences.forEach((sentence, index) => {
     addTableRow(sentence, index);
 });
 
 function addTableRow(sentence, sentence_id) {
-    var newRow = sentenceTable.insertRow();
+    const sentence_obj = { sentence, sentence_id };
 
-    var sentenceCell = newRow.insertCell(0);
+    const newRow = sentenceTable.insertRow();
+
+    const sentenceCell = newRow.insertCell(0);
     sentenceCell.innerHTML = sentence;
 
-    var micCell = newRow.insertCell(1);
+    const micCell = newRow.insertCell(1);
 
 
-    var micIcon = document.createElement("i");
-    micIcon.className = "fa-solid fa-microphone"; // Assuming you have Font Awesome or a similar library for icons
+
+
+    const micIcon = document.createElement("i");
+    micIcon.className = "fa-solid fa-microphone"; 
     micIcon.style.cursor = "pointer";
     micIcon.classList.add('mic-icon');
+    micIcon.id = "mic-icon-" + sentence_id;
     micIcon.onclick = () => recordButtonClicked(micIcon, 
-        (blob) => { sentence_api(blob, sentence_id, sentence); recordedSentences.push(sentence_id); }, // sends to the backend on finish
+        (blob) => { 
+            console.log("SENDING", sentence_obj); 
+            sentence_api(blob, sentence_obj.sentence_id, sentence_obj.sentence); 
+            recordedSentences.push(sentence_obj.sentence_id);  
+        }, // sends to the backend on finish
         false
     );
 
     micCell.appendChild(micIcon);
   }
 
-  finishPracticeButton.addEventListener('click', () => {
+  finishPracticeButton.addEventListener('click', async () => {
+    console.log(recordedSentences);
     const json = finish(recordedSentences);
-    console.log(json);
     alert("Practice finished! Please wait for the results.");
+    await json;
+    console.log(json);
   });
