@@ -564,3 +564,114 @@ function addTableRow(sentence, sentence_id) {
     await json;
     console.log(json);
   });
+
+
+/* Displaying words */
+
+
+/*
+//K W EH1 SH   AH0 N - user
+//K W EH1 S CH AH0 N - bot
+//('insert', 2, 3), ('replace', 3, 4)
+
+    shift = 0
+    for op in ops:
+        i, j = op[1], op[2]
+        if op[0] == 'delete':
+            del string[i + shift]
+            shift -= 1
+        elif op[0] == 'insert':
+            string.insert(i + shift + 1, string2[j])
+            shift += 1
+        elif op[0] == 'replace':
+            string[i + shift] = string2[j]
+        elif op[0] == 'transpose':
+            string[i + shift], string[j + shift] = string[j + shift], string[
+                i + shift]
+*/
+
+function createSpan(color, value){
+    let span = document.createElement('span');
+    span.style.color = 'green';
+    span.style.innerHTML = obj['word']
+    return span;
+}
+
+const sentenceElem = document.getElementById('sentence');
+const phonesElem = document.getElementById('phones');
+
+function colorizeForPronounciation(lst1, lst2, ops){
+
+    let words = lst2.map((obj) => createSpan('green', obj['word']));// get bot words
+    
+    let shift = 0;
+    for (const op of ops){
+        const type = op[0];
+        const i = op[1];
+        const j = op[2];
+        if (type == 'delete'){ // user must have added a part
+            shift -= 1;
+        } else if (type == 'insert') { // user must have deleted a part
+            words[j] = createSpan('red', words[j]);
+            shift += 1;
+        } else if (type == 'replace') { // user must have replaced a part
+            words[j] = createSpan('red', words[j]);
+        } else if (type == 'transpose') { // user must have transposed a part
+            words[j+shift] = createSpan('red', words[j+shift]);
+
+        }
+    }
+
+    let index = 0;
+    for (const obj2_index in lst2){ // iterate through bot responses
+        let matched_word = false;
+        for (const obj1_index in lst1){
+            if (index > obj1_index) continue
+
+            if (lst1[obj1_index]["word"] == lst2[obj2_index]["word"]){ // found matching word
+                index = obj1_index;
+                matched_word = true;
+                break;
+            }
+        }
+        if (!matched_word){ // did not find a matching word
+            continue
+        }
+
+        if (lst1[index]["phone_ops"]){ // if the word has phone_ops
+            words[obj2_index] = createSpan('yellow', words[obj2_index]);
+        }
+
+        let phones = lst2[obj2_index]['phones'].map((obj) => createSpan('green', obj['phone'])); // getbot phones
+
+        shift = 0;
+        for (const op of lst1[index]['phone_ops']){
+            const type = op[0];
+            const i = op[1];
+            const j = op[2];
+            if (type == 'delete'){ // user must have added a part
+                shift -= 1;
+            } else if (type == 'insert') { // user must have deleted a part
+                phones[j] = createSpan('red', phones[j]); 
+                shift += 1;
+            } else if (type == 'replace') { // user must have replaced a part
+                phones[j] = createSpan('red', phones[j]); 
+            } else if (type == 'transpose') { // user must have transposed a part
+                phones[j + shift] = createSpan('red', phones[j+shift]); 
+            }
+        }
+
+        words[obj2_index].onclick = () => { 
+            phonesElem.innerHTML = '';
+            phones.forEach((p) => {
+                phonesElem.appendChild(p);
+            })
+        };
+    }
+
+    sentenceElem.innerHTML = '';
+    words.forEach((w) => {
+        sentenceElem.appendChild(w);
+    })
+}
+
