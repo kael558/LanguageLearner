@@ -1,5 +1,5 @@
 # Language Learner
-# 🚨 Requires running the local server at [MFA Proxy Github](https://github.com/kael558/MFAProxy)🚨
+### 🚨 Requires running the local server at [MFA Proxy Github](https://github.com/kael558/MFAProxy)🚨
 
 <a name="readme-top"></a>
 
@@ -42,5 +42,5 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-[license-shield]: https://img.shields.io/github/license/kael558/LanguageLearner.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/badge/License-MIT-yellow.svg
 [license-url]: https://github.com/kael558/LanguageLearner/blob/main/LICENSE
