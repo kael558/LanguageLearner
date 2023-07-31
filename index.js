@@ -1,5 +1,4 @@
 /*** KEYS ****/
-const OPENAI_API_KEY = "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"
 
 
 /**** PROMPTS ****/
@@ -214,7 +213,6 @@ class ChatLogs {
 
     // Gets message from bot
     async getResponse(scenario_id) {
-        console.log('Getting response from bot');
         this.loading_assistant_msg = true;
 
         let messages = this.messages[scenario_id].map((message) => { 
@@ -236,7 +234,6 @@ class ChatLogs {
     // Handles message from user
     handleMessage(scenario_id, sender, content, get_response=true){
         if (audio && get_response) audio.pause();
-        console.log('Handling message from user', sender, content, get_response);
         chat_logs.loading_user_msg = false;
         let message = {
             sender, content,
@@ -406,7 +403,6 @@ finishScenarioButton.addEventListener('click', () => {
     if (audio) audio.pause();
 
     chat_logs.getChatLog(scenario_id).forEach(async (message) => {
-        console.log(message);
         if (message.sender == "from-me"){
             const eval = await message.evaluation;
             let p = document.createElement("p");
@@ -588,7 +584,6 @@ function display(id){
 
 
 finishPracticeButton.addEventListener('click', async () => {
-    console.log(recordedSentences);
     const promise = finish(recordedSentences);
     alert("Practice finished! Please wait for the results.");
     json_response = await promise;
