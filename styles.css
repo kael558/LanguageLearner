@@ -174,7 +174,6 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
-    height: 600px;
     width: 60%;
     margin: auto;
     border: 5px solid #ddd;
@@ -202,8 +201,28 @@ tr:nth-child(even) {
 
 tr {
     font-size: 25px;
+    border: 1px solid #000000;
 }
 
 i.fas {
     font-size: 18px;
+}
+
+#sentence-container{
+    align-items: center;
+    width: 60%;
+    margin: auto;
+    border: 5px solid #ddd;
+    padding: 10px;
+}
+
+#sentence {
+    font-size: 20px;
+    width: 60%;
+
+    padding: 0px;
+    padding-top: 5px;
+    overflow: auto;
+    overflow:auto;
+    padding-right: 30px;
 }
