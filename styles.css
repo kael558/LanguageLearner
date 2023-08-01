@@ -218,7 +218,7 @@ i.fas {
 }
 
 #sentence {
-    font-size: 28px;
+    font-size: 30px;
     width: 60%;
     align-items: center;
     margin: auto;
@@ -230,15 +230,15 @@ i.fas {
 }
 
 #phones{
-    font-size: 24px;
+    font-size: 18px;
     width: 60%;
     align-items: center;
     margin: auto;
 
     padding: 0px;
     padding-top: 5px;
-    overflow: auto;
-    overflow:auto;
+    display: flex;
+    justify-content: center;
 }
 
 /* Tooltip style */

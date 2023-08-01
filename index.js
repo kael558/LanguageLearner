@@ -294,7 +294,7 @@ class ChatLogs {
         const messages = [
             {
                 "role": "system",
-                "content": "Correct any mistakes in the user's LAST response. Look for spelling, grammar, and punctuation errors. Then output the correct sentence. If there are no mistakes, output 'No mistakes.'"
+                "content": "Correct any mistakes in the user's LAST response. Look for spelling, grammar, and punctuation errors. Be very nitpicky and then write the corrected version of the sentence. If there are no mistakes, output 'No mistakes. Well done.'"
             },
             {
                 "role": "assistant",
@@ -617,9 +617,10 @@ finishPracticeButton.addEventListener('click', async () => {
 		return;
 	}
     const promise = finish(recordedSentences);
-    alert("Practice finished! Please wait for the results.");
+    alert("Practice finished! Please wait for the results...");
     json_response = await promise;
     //json_response = valid;
+	alert("Results are ready! Please click on the sentences to see the results.")
     console.log(json_response);
     display(recordedSentences[0])
 });
@@ -693,7 +694,7 @@ function colorizeForPronounciation(words){
 			span = createSpan('green', word_obj['word']);
 		}
 
-		let phoneSpans = document.createElement('div');
+		let phoneSpans =[]
 		for (const phone_obj of word_obj['phones']){
 			let phoneSpan;
 			if ('ops' in phone_obj){ // phone had problem
@@ -719,12 +720,13 @@ function colorizeForPronounciation(words){
 			} else {
 				phoneSpan = createSpan('green', phone_obj['phone']);
 			}
-			phoneSpans.appendChild(phoneSpan);
+			phoneSpan.style.padding = '6px';
+			phoneSpans.push(phoneSpan);
 		}
 
 		span.onclick = function() {
 			phonesElem.innerHTML = '';
-			phonesElem.appendChild(phoneSpans);
+			phoneSpans.forEach(phoneSpan => phonesElem.appendChild(phoneSpan));
 		}
 
 		sentenceElem.appendChild(span);
@@ -754,7 +756,10 @@ function getHighlightedWords() {
 function playAudio(sentence_id, type){
 	stopAudio.disabled = false;
 	const words = getHighlightedWords();
-	console.log(words);
+	if (words.length === 0){
+		alert("Please highlight the words you want to hear!");
+		return;
+	}
 
 	const keyMin = (type === 'bot') ? 'matched_xmin' : 'xmin';
 	const keyMax = (type === 'bot') ? 'matched_xmax' : 'xmax';
@@ -763,48 +768,40 @@ function playAudio(sentence_id, type){
 
 	let json_index = 0;
 	let word_index = 0;
-	while (true){
-		if (json_response[sentence_id][json_index]['word'] !== words[word_idx)){
-
+	while (word_index < words.length){
+		if (json_response[sentence_id][json_index]['word'] !== words[word_index]){
+			startTime = undefined;
+		} else { // if match
+			if (startTime === undefined) startTime = json_response[sentence_id][json_index][keyMin];
+			word_index++;
 		}
-
-
 		json_index++;
 	}
-
-
-
-	for (const word_idx in words){
-		while (json_response[sentence_id][json_index]['word'] !== words[word_idx]){
-			json_index++;
-		}
-
-		for (const idx = json_index; idx < json_response[sentence_id].length; idx++){
-			if (json_response[sentence_id][idx]['word'] === words[word_idx + idx]){
-				if (startTime === undefined) startTime = json_response[sentence_id][json_index][keyMin];
-				json_index++;
-			} else {
-				startTime = undefined;
-			}
-		}
-	}
 	let endTime = json_response[sentence_id][json_index - 1][keyMax];
-	
-	audioFiles[sentence_id][type].play();
 
-	audio.addEventListener('loadedmetadata', function() {
-		audio.currentTime = startTime;
-	});
+	audio = audioFiles[sentence_id][type];
+	audio.currentTime = startTime;
+	audio.play();
+
 
 	audio.addEventListener('timeupdate', function() {
-	if (audio.currentTime >= endTime) {
-		stopAudioFn();
-	}
+		console.log(audio.currentTime, endTime);
+		if (audio.currentTime >= endTime) {
+			console.log("stopping!");
+			stopAudioFn();
+			audio.removeEventListener('timeupdate', arguments.callee);
+		}
+	});
+
+	audio.addEventListener('ended', () => {
+		// The audio has finished playing, you can perform actions here.
+		stopAudio.disabled = true;
+		audio.removeEventListener('ended', arguments.callee);
 	});
 }
 
 function stopAudioFn(){
-	audio.pause();
+	if (audio && !audio.paused) audio.pause();
 	stopAudio.disabled = true;
 }
 
