@@ -18,7 +18,7 @@ Conversation mode:
 Practice mode:
 1. Read sentences
 2. See your pronunciation mistakes
-
+3. Play the audio of both ElevenLabs and your audio to compare the difference
 ## 🔧 How it works
 It uses a proxy api with:
  - ElevenLabs for realistic tts
@@ -30,11 +30,10 @@ Phones are generated for both the user recorded message and the ElevenLabs tts.
 
 Damerau-levenshtein distance can be computed between the words and the phones of each word to get a pronunciation difference. 
 
-It will tell you if you need to replace, insert, delete or transpose a word/phone. 
-
+The shortest-edit path is interpreted as replacing, inserting, deleting or transposing a word/phone. 
 ## 📅 Roadmap
-[ ] highlight section of sentence -> crops audio for both human and elevenlabs and puts it side-by-side
-[ ] better phone error messages
+[x] highlight section of sentence -> crops audio for both human and elevenlabs and puts it side-by-side
+[x] better phone error messages
 [ ] add more languages
 
 ## ⚖️ License
