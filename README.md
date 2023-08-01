@@ -32,9 +32,9 @@ Damerau-levenshtein distance can be computed between the words and the phones of
 
 The shortest-edit path is interpreted as replacing, inserting, deleting or transposing a word/phone. 
 ## 📅 Roadmap
-[x] highlight section of sentence -> crops audio for both human and elevenlabs and puts it side-by-side
-[x] better phone error messages
-[ ] add more languages
+- [x] highlight section of sentence -> crops audio for both human and elevenlabs and puts it side-by-side
+- [x] better phone error messages
+- [ ] add more languages
 
 ## ⚖️ License
 Distributed under the MIT License. See `LICENSE.txt` for more information.
