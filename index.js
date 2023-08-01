@@ -9,7 +9,7 @@
 
 /****  API HANDLING ****/
 // TODO handle streaming response
-let audio;
+
 async function textToSpeech(text, voice_id='21m00Tcm4TlvDq8ikWAM'){
     try {
         const res = await fetch('http://localhost:5000/tts', {
@@ -21,10 +21,9 @@ async function textToSpeech(text, voice_id='21m00Tcm4TlvDq8ikWAM'){
               text, voice_id
             })
           })
-        const blob = await res.blob()
-        const url = window.URL.createObjectURL(blob);
-        audio = new Audio(url);
-        audio.play();
+		return await res.blob()
+
+
     } catch (err){
         console.log(err);
     }
@@ -58,7 +57,8 @@ async function response(messages){
 }
 
 
-async function transcribe(audioData, prompt = '', language = 'en') {
+async function transcribe(audioData, sentence_id=false, prompt = '', language = 'en') {
+
     var reader = new FileReader();
     reader.readAsDataURL(audioData)
     return new Promise((resolve, reject) => {
@@ -83,30 +83,59 @@ async function transcribe(audioData, prompt = '', language = 'en') {
       }) 
 }
 
-async function sentence_api(audioData, sentence_id, sentence, voice_id='21m00Tcm4TlvDq8ikWAM') {
-    var reader = new FileReader();
-    reader.readAsDataURL(audioData)
+let audioFiles = {};
+
+async function sentence_api(audioData, sentence_id, sentence, voice_id='21m00Tcm4TlvDq8ikWAM') { 
+	if (!audioFiles[sentence_id]) audioFiles[sentence_id] = {};
+	audioFiles[sentence_id]['user'] = new Audio(window.URL.createObjectURL(audioData));
+
+	var reader = new FileReader();
+    reader.readAsDataURL(audioData);
+    
     return new Promise((resolve, reject) => {
         reader.onloadend = async function() {
-            // Send base64 string data backend service
-            const res = await fetch('http://localhost:5000/sentence', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({audio: reader.result, sentence_id, sentence, voice_id})
-            })
+            const botAudioBlob = await textToSpeech(sentence, voice_id);
+            let botAudioReader = new FileReader();
+            botAudioReader.readAsDataURL(botAudioBlob);
 
-            if (!res.ok) {
-                console.log(res);
-                throw new Error('bad status code: ' + res.status);
+            botAudioReader.onloadend = async function() {
+                // Send base64 string data backend service
+                const res = await fetch('http://localhost:5000/sentence', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({audio: reader.result, 
+                                          botAudio: botAudioReader.result,
+                                          sentence_id, 
+                                          sentence, 
+                                          voice_id})
+                });
+
+                if (!res.ok) {
+                    console.log(res);
+                    reject('bad status code: ' + res.status);
+                }
+
+				//put audio into audioFiles
+				const botUrl = window.URL.createObjectURL(botAudioBlob);
+				audioFiles[sentence_id]['bot'] = new Audio(botUrl);
+				
+                const json = await res.json();
+                resolve(json.text);
             }
 
-            const json = await res.json();
-            resolve(json.text);
+            botAudioReader.onerror = (error) => {
+                reject(error);
+            };
         }
-    }) 
+
+        reader.onerror = (error) => {
+            reject(error);
+        };
+    }); 
 }
+
 
 async function finish(sentence_ids) {
 
@@ -225,7 +254,10 @@ class ChatLogs {
         });
 
         const res = await response(messages);
-        await textToSpeech(res, scenarios[scenario_id].voice_id); // wait for tts to start
+        const audioBlob = await textToSpeech(res, scenarios[scenario_id].voice_id); // wait for tts to start
+        const url = window.URL.createObjectURL(audioBlob);
+        audio = new Audio(url);
+		audio.play();
 
         this.loading_assistant_msg = false;
         this.handleMessage(scenario_id, 'from-bot', res,  false);
@@ -569,26 +601,27 @@ function addTableRow(_sentence, _sentence_id) {
   }
 
 
+let chosen_sentence_id = 0;
 function display(id){
     if (json_response === undefined || !(id in json_response)) return;
+	chosen_sentence_id = id;
+    const json = json_response[id];
 
-    const sentenceData = json_response[id];
-
-    const sentenceUser = sentenceData[0];
-    const sentenceBot = sentenceData[1];
-    const word_ops = sentenceData[2];
-    colorizeForPronounciation(sentenceUser, sentenceBot, word_ops);
+    colorizeForPronounciation(json);
 }
 
-
-
-
+let valid;
 finishPracticeButton.addEventListener('click', async () => {
+	if (recordedSentences.length == 0) {
+		alert("You haven't recorded any sentences!");
+		return;
+	}
     const promise = finish(recordedSentences);
     alert("Practice finished! Please wait for the results.");
     json_response = await promise;
+    //json_response = valid;
     console.log(json_response);
-    display(0)
+    display(recordedSentences[0])
 });
 
 
@@ -627,1545 +660,391 @@ function createSpan(color, value){
     return span;
 }
 
+
+
+
 const sentenceElem = document.getElementById('sentence');
 const phonesElem = document.getElementById('phones');
 
-function colorizeForPronounciation(lst1, lst2, ops){
-    //console.log(lst1, lst2, ops);
-    let words = lst2.map((obj) => createSpan('green', obj['word']));// get bot words
-    
-    let shift = 0;
-    for (const op of ops){
-        const type = op[0];
-        const i = op[1];
-        const j = op[2];
-        if (type == 'delete'){ // user must have added a part
-            shift -= 1;
-        } else if (type == 'insert') { // user must have deleted a part
-            words[j] = createSpan('red', words[j].innerHTML);
-            shift += 1;
-        } else if (type == 'replace') { // user must have replaced a part
-            words[j] = createSpan('red', words[j].innerHTML);
-        } else if (type == 'transpose') { // user must have transposed a part
-            words[j+shift] = createSpan('red', words[j+shift].innerHTML);
+function colorizeForPronounciation(words){
+	sentenceElem.innerHTML = "";
+	for (const word_obj of words){
+		let span;
+		if ('ops' in word_obj){ // word had problem with position
+			span = createSpan('red', word_obj['word']);
+			span.addEventListener('mouseover', function(e) {
+				const tooltip = document.createElement('div');
+				tooltip.style.top = e.pageY + 'px';
+				tooltip.style.left = e.pageX + 'px';
+				tooltip.style.display = 'block';
+				tooltip.id = 'tooltip';
+				
+				tooltip.innerHTML = word_obj['ops'].join('<br>');
+				document.body.appendChild(tooltip);
+			});
+			
+			span.addEventListener('mouseout', function() {
+				const tooltip = document.getElementById('tooltip');
+				if (tooltip) {
+					tooltip.parentNode.removeChild(tooltip);
+				}
+			});
+		} else { // no problem with word position
+			span = createSpan('green', word_obj['word']);
+		}
 
-        }
-    }
+		let phoneSpans = document.createElement('div');
+		for (const phone_obj of word_obj['phones']){
+			let phoneSpan;
+			if ('ops' in phone_obj){ // phone had problem
+				phoneSpan = createSpan('red', phone_obj['phone']);
+				phoneSpan.addEventListener('mouseover', function(e) {
+					const tooltip = document.createElement('div');
+					tooltip.style.top = e.pageY + 'px';
+					tooltip.style.left = e.pageX + 'px';
+					tooltip.style.display = 'block';
+					tooltip.id = 'tooltip';
+					tooltip.innerHTML = phone_obj['ops'].join('<br>');
+					document.body.appendChild(tooltip);
+				});
+				
+				phoneSpan.addEventListener('mouseout', function() {
+					const tooltip = document.getElementById('tooltip');
+					if (tooltip) {
+						tooltip.parentNode.removeChild(tooltip);
+					}
+				});
 
-    let index = 0;
-    for (const obj2_index in lst2){ // iterate through bot responses
-        let matched_word = false;
-        for (const obj1_index in lst1){
-            if (index >= obj1_index) continue
+				span.style.color = 'orange';
+			} else {
+				phoneSpan = createSpan('green', phone_obj['phone']);
+			}
+			phoneSpans.appendChild(phoneSpan);
+		}
 
-            if (lst1[obj1_index]["word"] == lst2[obj2_index]["word"]){ // found matching word
-                index = obj1_index;
-                matched_word = true;
-                break;
-            }
-        }
-        if (!matched_word){ // did not find a matching word
-            continue
-        }
+		span.onclick = function() {
+			phonesElem.innerHTML = '';
+			phonesElem.appendChild(phoneSpans);
+		}
 
-        if (lst1[index]["phone_ops"] && lst1[index]["phone_ops"].length > 0){ // if the word has phone_ops
-            words[obj2_index] = createSpan('orange', words[obj2_index].innerHTML);
-        }
-
-        let phones = lst2[obj2_index]['phones'].map((obj) => createSpan('green', obj['phone'])); // getbot phones
-
-        shift = 0;
-        //console.log(index, lst1[index], lst1[index]['phone_ops'])
-        for (const op of lst1[index]['phone_ops']){
-            const type = op[0];
-            const i = op[1];
-            const j = op[2];
-            if (type == 'delete'){ // user must have added a part
-                shift -= 1;
-            } else if (type == 'insert') { // user must have deleted a part
-                phones[j] = createSpan('red', phones[j].innerHTML); 
-                shift += 1;
-            } else if (type == 'replace') { // user must have replaced a part
-                phones[j] = createSpan('red', phones[j].innerHTML); 
-            } else if (type == 'transpose') { // user must have transposed a part
-                phones[j + shift] = createSpan('red', phones[j+shift].innerHTML); 
-            }
-        }
-
-        words[obj2_index].onclick = () => { 
-            phonesElem.innerHTML = '';
-            phones.forEach((p) => {
-                phonesElem.appendChild(p);
-            })
-        };
-    }
-
-    sentenceElem.innerHTML = '';
-    words.forEach((w) => {
-        sentenceElem.appendChild(w);
-    })
+		sentenceElem.appendChild(span);
+	}
 }
 
-/*json_response = {
-	"0": [
-		[
-			{
-                "phone_ops": [],
-				"phones": [
-					{
-						"phone": "DH",
-						"xmax": 0.86,
-						"xmin": 0.84
-					},
-					{
-						"phone": "AH0",
-						"xmax": 0.93,
-						"xmin": 0.86
-					}
-				],
-				"word": "the",
-				"xmax": 0.93,
-				"xmin": 0.84
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "W",
-						"xmax": 1.09,
-						"xmin": 0.93
-					},
-					{
-						"phone": "ER1",
-						"xmax": 1.12,
-						"xmin": 1.09
-					},
-					{
-						"phone": "L",
-						"xmax": 1.34,
-						"xmin": 1.12
-					},
-					{
-						"phone": "D",
-						"xmax": 1.4,
-						"xmin": 1.34
-					}
-				],
-				"word": "world",
-				"xmax": 1.4,
-				"xmin": 0.93
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "IH0",
-						"xmax": 1.48,
-						"xmin": 1.4
-					},
-					{
-						"phone": "Z",
-						"xmax": 1.56,
-						"xmin": 1.48
-					}
-				],
-				"word": "is",
-				"xmax": 1.56,
-				"xmin": 1.4
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "V",
-						"xmax": 1.67,
-						"xmin": 1.56
-					},
-					{
-						"phone": "EH1",
-						"xmax": 1.73,
-						"xmin": 1.67
-					},
-					{
-						"phone": "R",
-						"xmax": 1.83,
-						"xmin": 1.73
-					},
-					{
-						"phone": "IY0",
-						"xmax": 1.94,
-						"xmin": 1.83
-					}
-				],
-				"word": "very",
-				"xmax": 1.94,
-				"xmin": 1.56
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "D",
-						"xmax": 2.04,
-						"xmin": 1.94
-					},
-					{
-						"phone": "IH1",
-						"xmax": 2.12,
-						"xmin": 2.04
-					},
-					{
-						"phone": "F",
-						"xmax": 2.23,
-						"xmin": 2.12
-					},
-					{
-						"phone": "R",
-						"xmax": 2.26,
-						"xmin": 2.23
-					},
-					{
-						"phone": "AH0",
-						"xmax": 2.29,
-						"xmin": 2.26
-					},
-					{
-						"phone": "N",
-						"xmax": 2.32,
-						"xmin": 2.29
-					},
-					{
-						"phone": "T",
-						"xmax": 2.35,
-						"xmin": 2.32
-					}
-				],
-				"word": "different",
-				"xmax": 2.35,
-				"xmin": 1.94
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "N",
-						"xmax": 2.45,
-						"xmin": 2.35
-					},
-					{
-						"phone": "AW1",
-						"xmax": 2.81,
-						"xmin": 2.45
-					}
-				],
-				"word": "now",
-				"xmax": 2.81,
-				"xmin": 2.35
-			}
-		],
-		[
-			{
-				"phones": [
-					{
-						"phone": "DH",
-						"xmax": 0.23,
-						"xmin": 0.21
-					},
-					{
-						"phone": "AH0",
-						"xmax": 0.28,
-						"xmin": 0.23
-					}
-				],
-				"word": "the",
-				"xmax": 0.28,
-				"xmin": 0.21
-			},
-			{
-				"phones": [
-					{
-						"phone": "W",
-						"xmax": 0.34,
-						"xmin": 0.28
-					},
-					{
-						"phone": "ER1",
-						"xmax": 0.41,
-						"xmin": 0.34
-					},
-					{
-						"phone": "L",
-						"xmax": 0.45,
-						"xmin": 0.41
-					},
-					{
-						"phone": "D",
-						"xmax": 0.49,
-						"xmin": 0.45
-					}
-				],
-				"word": "world",
-				"xmax": 0.49,
-				"xmin": 0.28
-			},
-			{
-				"phones": [
-					{
-						"phone": "IH0",
-						"xmax": 0.53,
-						"xmin": 0.49
-					},
-					{
-						"phone": "Z",
-						"xmax": 0.61,
-						"xmin": 0.53
-					}
-				],
-				"word": "is",
-				"xmax": 0.61,
-				"xmin": 0.49
-			},
-			{
-				"phones": [
-					{
-						"phone": "V",
-						"xmax": 0.67,
-						"xmin": 0.61
-					},
-					{
-						"phone": "EH1",
-						"xmax": 0.78,
-						"xmin": 0.67
-					},
-					{
-						"phone": "R",
-						"xmax": 0.82,
-						"xmin": 0.78
-					},
-					{
-						"phone": "IY0",
-						"xmax": 0.91,
-						"xmin": 0.82
-					}
-				],
-				"word": "very",
-				"xmax": 0.91,
-				"xmin": 0.61
-			},
-			{
-				"phones": [
-					{
-						"phone": "D",
-						"xmax": 0.98,
-						"xmin": 0.91
-					},
-					{
-						"phone": "IH1",
-						"xmax": 1.03,
-						"xmin": 0.98
-					},
-					{
-						"phone": "F",
-						"xmax": 1.1,
-						"xmin": 1.03
-					},
-					{
-						"phone": "R",
-						"xmax": 1.13,
-						"xmin": 1.1
-					},
-					{
-						"phone": "AH0",
-						"xmax": 1.18,
-						"xmin": 1.13
-					},
-					{
-						"phone": "N",
-						"xmax": 1.21,
-						"xmin": 1.18
-					},
-					{
-						"phone": "T",
-						"xmax": 1.24,
-						"xmin": 1.21
-					}
-				],
-				"word": "different",
-				"xmax": 1.24,
-				"xmin": 0.91
-			},
-			{
-				"phones": [
-					{
-						"phone": "N",
-						"xmax": 1.28,
-						"xmin": 1.24
-					},
-					{
-						"phone": "AW1",
-						"xmax": 1.57,
-						"xmin": 1.28
-					}
-				],
-				"word": "now",
-				"xmax": 1.57,
-				"xmin": 1.24
-			}
-		],
-		[]
-	],
-	"1": [
-		[
-			{
-				"phones": [
-					{
-						"phone": "F",
-						"xmax": 0.58,
-						"xmin": 0.48
-					},
-					{
-						"phone": "ER0",
-						"xmax": 0.62,
-						"xmin": 0.58
-					}
-				],
-				"word": "for",
-				"xmax": 0.62,
-				"xmin": 0.48
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "M",
-						"xmax": 0.71,
-						"xmin": 0.62
-					},
-					{
-						"phone": "AE1",
-						"xmax": 0.93,
-						"xmin": 0.71
-					},
-					{
-						"phone": "N",
-						"xmax": 1,
-						"xmin": 0.93
-					}
-				],
-				"word": "man",
-				"xmax": 1,
-				"xmin": 0.62
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 1.04,
-						"xmin": 1
-					},
-					{
-						"phone": "OW1",
-						"xmax": 1.1,
-						"xmin": 1.04
-					},
-					{
-						"phone": "L",
-						"xmax": 1.26,
-						"xmin": 1.1
-					},
-					{
-						"phone": "D",
-						"xmax": 1.3,
-						"xmin": 1.26
-					},
-					{
-						"phone": "Z",
-						"xmax": 1.35,
-						"xmin": 1.3
-					}
-				],
-				"word": "holds",
-				"xmax": 1.35,
-				"xmin": 1
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "IH0",
-						"xmax": 1.4,
-						"xmin": 1.35
-					},
-					{
-						"phone": "N",
-						"xmax": 1.44,
-						"xmin": 1.4
-					}
-				],
-				"word": "in",
-				"xmax": 1.44,
-				"xmin": 1.35
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 1.45,
-						"xmin": 1.44
-					},
-					{
-						"phone": "IH0",
-						"xmax": 1.51,
-						"xmin": 1.45
-					},
-					{
-						"phone": "Z",
-						"xmax": 1.61,
-						"xmin": 1.51
-					}
-				],
-				"word": "his",
-				"xmax": 1.61,
-				"xmin": 1.44
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "M",
-						"xmax": 1.66,
-						"xmin": 1.61
-					},
-					{
-						"phone": "AO1",
-						"xmax": 1.72,
-						"xmin": 1.66
-					},
-					{
-						"phone": "R",
-						"xmax": 1.78,
-						"xmin": 1.72
-					},
-					{
-						"phone": "T",
-						"xmax": 1.84,
-						"xmin": 1.78
-					},
-					{
-						"phone": "AH0",
-						"xmax": 1.9,
-						"xmin": 1.84
-					},
-					{
-						"phone": "L",
-						"xmax": 2.01,
-						"xmin": 1.9
-					}
-				],
-				"word": "mortal",
-				"xmax": 2.01,
-				"xmin": 1.61
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 2.02,
-						"xmin": 2.01
-					},
-					{
-						"phone": "AE1",
-						"xmax": 2.16,
-						"xmin": 2.02
-					},
-					{
-						"phone": "N",
-						"xmax": 2.24,
-						"xmin": 2.16
-					},
-					{
-						"phone": "D",
-						"xmax": 2.3,
-						"xmin": 2.24
-					},
-					{
-						"phone": "Z",
-						"xmax": 2.39,
-						"xmin": 2.3
-					}
-				],
-				"word": "hands",
-				"xmax": 2.39,
-				"xmin": 2.01
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "DH",
-						"xmax": 2.41,
-						"xmin": 2.39
-					},
-					{
-						"phone": "AH0",
-						"xmax": 2.45,
-						"xmin": 2.41
-					}
-				],
-				"word": "the",
-				"xmax": 2.45,
-				"xmin": 2.39
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "P",
-						"xmax": 2.55,
-						"xmin": 2.45
-					},
-					{
-						"phone": "AW1",
-						"xmax": 2.67,
-						"xmin": 2.55
-					},
-					{
-						"phone": "ER0",
-						"xmax": 2.83,
-						"xmin": 2.67
-					}
-				],
-				"word": "power",
-				"xmax": 2.83,
-				"xmin": 2.45
-			},
-			{
-				"phone_ops": [
-					[
-						"replace",
-						1,
-						1
-					]
-				],
-				"phones": [
-					{
-						"phone": "T",
-						"xmax": 2.94,
-						"xmin": 2.83
-					},
-					{
-						"phone": "AH0",
-						"xmax": 3.03,
-						"xmin": 2.94
-					}
-				],
-				"word": "to",
-				"xmax": 3.03,
-				"xmin": 2.83
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "AH0",
-						"xmax": 3.07,
-						"xmin": 3.03
-					},
-					{
-						"phone": "B",
-						"xmax": 3.15,
-						"xmin": 3.07
-					},
-					{
-						"phone": "AA1",
-						"xmax": 3.18,
-						"xmin": 3.15
-					},
-					{
-						"phone": "L",
-						"xmax": 3.36,
-						"xmin": 3.18
-					},
-					{
-						"phone": "IH0",
-						"xmax": 3.41,
-						"xmin": 3.36
-					},
-					{
-						"phone": "SH",
-						"xmax": 3.52,
-						"xmin": 3.41
-					}
-				],
-				"word": "abolish",
-				"xmax": 3.52,
-				"xmin": 3.03
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "AO1",
-						"xmax": 3.63,
-						"xmin": 3.52
-					},
-					{
-						"phone": "L",
-						"xmax": 3.8,
-						"xmin": 3.63
-					}
-				],
-				"word": "all",
-				"xmax": 3.8,
-				"xmin": 3.52
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "F",
-						"xmax": 3.93,
-						"xmin": 3.8
-					},
-					{
-						"phone": "AO1",
-						"xmax": 4.01,
-						"xmin": 3.93
-					},
-					{
-						"phone": "R",
-						"xmax": 4.09,
-						"xmin": 4.01
-					},
-					{
-						"phone": "M",
-						"xmax": 4.16,
-						"xmin": 4.09
-					},
-					{
-						"phone": "Z",
-						"xmax": 4.21,
-						"xmin": 4.16
-					}
-				],
-				"word": "forms",
-				"xmax": 4.21,
-				"xmin": 3.8
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "AH0",
-						"xmax": 4.27,
-						"xmin": 4.21
-					},
-					{
-						"phone": "V",
-						"xmax": 4.39,
-						"xmin": 4.27
-					}
-				],
-				"word": "of",
-				"xmax": 4.39,
-				"xmin": 4.21
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 4.4,
-						"xmin": 4.39
-					},
-					{
-						"phone": "Y",
-						"xmax": 4.43,
-						"xmin": 4.4
-					},
-					{
-						"phone": "UW1",
-						"xmax": 4.48,
-						"xmin": 4.43
-					},
-					{
-						"phone": "M",
-						"xmax": 4.54,
-						"xmin": 4.48
-					},
-					{
-						"phone": "AH0",
-						"xmax": 4.57,
-						"xmin": 4.54
-					},
-					{
-						"phone": "N",
-						"xmax": 4.64,
-						"xmin": 4.57
-					}
-				],
-				"word": "human",
-				"xmax": 4.64,
-				"xmin": 4.39
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "P",
-						"xmax": 4.75,
-						"xmin": 4.64
-					},
-					{
-						"phone": "AA1",
-						"xmax": 4.84,
-						"xmin": 4.75
-					},
-					{
-						"phone": "V",
-						"xmax": 4.87,
-						"xmin": 4.84
-					},
-					{
-						"phone": "ER0",
-						"xmax": 5,
-						"xmin": 4.87
-					},
-					{
-						"phone": "T",
-						"xmax": 5.09,
-						"xmin": 5
-					},
-					{
-						"phone": "IY0",
-						"xmax": 5.34,
-						"xmin": 5.09
-					}
-				],
-				"word": "poverty",
-				"xmax": 5.34,
-				"xmin": 4.64
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "AE1",
-						"xmax": 5.48,
-						"xmin": 5.45
-					},
-					{
-						"phone": "N",
-						"xmax": 5.51,
-						"xmin": 5.48
-					},
-					{
-						"phone": "D",
-						"xmax": 5.55,
-						"xmin": 5.51
-					}
-				],
-				"word": "and",
-				"xmax": 5.55,
-				"xmin": 5.45
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "AO1",
-						"xmax": 5.69,
-						"xmin": 5.55
-					},
-					{
-						"phone": "L",
-						"xmax": 5.73,
-						"xmin": 5.69
-					}
-				],
-				"word": "all",
-				"xmax": 5.73,
-				"xmin": 5.55
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "F",
-						"xmax": 5.89,
-						"xmin": 5.73
-					},
-					{
-						"phone": "AO1",
-						"xmax": 5.96,
-						"xmin": 5.89
-					},
-					{
-						"phone": "R",
-						"xmax": 6.02,
-						"xmin": 5.96
-					},
-					{
-						"phone": "M",
-						"xmax": 6.11,
-						"xmin": 6.02
-					},
-					{
-						"phone": "Z",
-						"xmax": 6.19,
-						"xmin": 6.11
-					}
-				],
-				"word": "forms",
-				"xmax": 6.19,
-				"xmin": 5.73
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "AH0",
-						"xmax": 6.24,
-						"xmin": 6.19
-					},
-					{
-						"phone": "V",
-						"xmax": 6.35,
-						"xmin": 6.24
-					}
-				],
-				"word": "of",
-				"xmax": 6.35,
-				"xmin": 6.19
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 6.36,
-						"xmin": 6.35
-					},
-					{
-						"phone": "Y",
-						"xmax": 6.4,
-						"xmin": 6.36
-					},
-					{
-						"phone": "UW1",
-						"xmax": 6.46,
-						"xmin": 6.4
-					},
-					{
-						"phone": "M",
-						"xmax": 6.53,
-						"xmin": 6.46
-					},
-					{
-						"phone": "AH0",
-						"xmax": 6.56,
-						"xmin": 6.53
-					},
-					{
-						"phone": "N",
-						"xmax": 6.62,
-						"xmin": 6.56
-					}
-				],
-				"word": "human",
-				"xmax": 6.62,
-				"xmin": 6.35
-			},
-			{
-				"phone_ops": [],
-				"phones": [
-					{
-						"phone": "L",
-						"xmax": 6.69,
-						"xmin": 6.62
-					},
-					{
-						"phone": "AY1",
-						"xmax": 6.73,
-						"xmin": 6.69
-					},
-					{
-						"phone": "F",
-						"xmax": 7.06,
-						"xmin": 6.73
-					}
-				],
-				"word": "life",
-				"xmax": 7.06,
-				"xmin": 6.62
-			}
-		],
-		[
-			{
-				"phones": [
-					{
-						"phone": "F",
-						"xmax": 0.22,
-						"xmin": 0.15
-					},
-					{
-						"phone": "ER0",
-						"xmax": 0.3,
-						"xmin": 0.22
-					}
-				],
-				"word": "for",
-				"xmax": 0.3,
-				"xmin": 0.15
-			},
-			{
-				"phones": [
-					{
-						"phone": "M",
-						"xmax": 0.39,
-						"xmin": 0.3
-					},
-					{
-						"phone": "AE1",
-						"xmax": 0.57,
-						"xmin": 0.39
-					},
-					{
-						"phone": "N",
-						"xmax": 0.63,
-						"xmin": 0.57
-					}
-				],
-				"word": "man",
-				"xmax": 0.63,
-				"xmin": 0.3
-			},
-			{
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 0.69,
-						"xmin": 0.63
-					},
-					{
-						"phone": "OW1",
-						"xmax": 0.74,
-						"xmin": 0.69
-					},
-					{
-						"phone": "L",
-						"xmax": 0.87,
-						"xmin": 0.74
-					},
-					{
-						"phone": "D",
-						"xmax": 0.93,
-						"xmin": 0.87
-					},
-					{
-						"phone": "Z",
-						"xmax": 0.96,
-						"xmin": 0.93
-					}
-				],
-				"word": "holds",
-				"xmax": 0.96,
-				"xmin": 0.63
-			},
-			{
-				"phones": [
-					{
-						"phone": "IH0",
-						"xmax": 1,
-						"xmin": 0.96
-					},
-					{
-						"phone": "N",
-						"xmax": 1.05,
-						"xmin": 1
-					}
-				],
-				"word": "in",
-				"xmax": 1.05,
-				"xmin": 0.96
-			},
-			{
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 1.06,
-						"xmin": 1.05
-					},
-					{
-						"phone": "IH0",
-						"xmax": 1.13,
-						"xmin": 1.06
-					},
-					{
-						"phone": "Z",
-						"xmax": 1.23,
-						"xmin": 1.13
-					}
-				],
-				"word": "his",
-				"xmax": 1.23,
-				"xmin": 1.05
-			},
-			{
-				"phones": [
-					{
-						"phone": "M",
-						"xmax": 1.35,
-						"xmin": 1.23
-					},
-					{
-						"phone": "AO1",
-						"xmax": 1.42,
-						"xmin": 1.35
-					},
-					{
-						"phone": "R",
-						"xmax": 1.47,
-						"xmin": 1.42
-					},
-					{
-						"phone": "T",
-						"xmax": 1.5,
-						"xmin": 1.47
-					},
-					{
-						"phone": "AH0",
-						"xmax": 1.55,
-						"xmin": 1.5
-					},
-					{
-						"phone": "L",
-						"xmax": 1.62,
-						"xmin": 1.55
-					}
-				],
-				"word": "mortal",
-				"xmax": 1.62,
-				"xmin": 1.23
-			},
-			{
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 1.63,
-						"xmin": 1.62
-					},
-					{
-						"phone": "AE1",
-						"xmax": 1.79,
-						"xmin": 1.63
-					},
-					{
-						"phone": "N",
-						"xmax": 1.83,
-						"xmin": 1.79
-					},
-					{
-						"phone": "D",
-						"xmax": 1.88,
-						"xmin": 1.83
-					},
-					{
-						"phone": "Z",
-						"xmax": 1.91,
-						"xmin": 1.88
-					}
-				],
-				"word": "hands",
-				"xmax": 1.91,
-				"xmin": 1.62
-			},
-			{
-				"phones": [
-					{
-						"phone": "DH",
-						"xmax": 1.93,
-						"xmin": 1.91
-					},
-					{
-						"phone": "AH0",
-						"xmax": 1.99,
-						"xmin": 1.93
-					}
-				],
-				"word": "the",
-				"xmax": 1.99,
-				"xmin": 1.91
-			},
-			{
-				"phones": [
-					{
-						"phone": "P",
-						"xmax": 2.13,
-						"xmin": 1.99
-					},
-					{
-						"phone": "AW1",
-						"xmax": 2.24,
-						"xmin": 2.13
-					},
-					{
-						"phone": "ER0",
-						"xmax": 2.35,
-						"xmin": 2.24
-					}
-				],
-				"word": "power",
-				"xmax": 2.35,
-				"xmin": 1.99
-			},
-			{
-				"phones": [
-					{
-						"phone": "T",
-						"xmax": 2.46,
-						"xmin": 2.35
-					},
-					{
-						"phone": "UW1",
-						"xmax": 2.51,
-						"xmin": 2.46
-					}
-				],
-				"word": "to",
-				"xmax": 2.51,
-				"xmin": 2.35
-			},
-			{
-				"phones": [
-					{
-						"phone": "AH0",
-						"xmax": 2.58,
-						"xmin": 2.51
-					},
-					{
-						"phone": "B",
-						"xmax": 2.67,
-						"xmin": 2.58
-					},
-					{
-						"phone": "AA1",
-						"xmax": 2.79,
-						"xmin": 2.67
-					},
-					{
-						"phone": "L",
-						"xmax": 2.84,
-						"xmin": 2.79
-					},
-					{
-						"phone": "IH0",
-						"xmax": 2.9,
-						"xmin": 2.84
-					},
-					{
-						"phone": "SH",
-						"xmax": 2.99,
-						"xmin": 2.9
-					}
-				],
-				"word": "abolish",
-				"xmax": 2.99,
-				"xmin": 2.51
-			},
-			{
-				"phones": [
-					{
-						"phone": "AO1",
-						"xmax": 3.18,
-						"xmin": 2.99
-					},
-					{
-						"phone": "L",
-						"xmax": 3.22,
-						"xmin": 3.18
-					}
-				],
-				"word": "all",
-				"xmax": 3.22,
-				"xmin": 2.99
-			},
-			{
-				"phones": [
-					{
-						"phone": "F",
-						"xmax": 3.31,
-						"xmin": 3.22
-					},
-					{
-						"phone": "AO1",
-						"xmax": 3.35,
-						"xmin": 3.31
-					},
-					{
-						"phone": "R",
-						"xmax": 3.44,
-						"xmin": 3.35
-					},
-					{
-						"phone": "M",
-						"xmax": 3.5,
-						"xmin": 3.44
-					},
-					{
-						"phone": "Z",
-						"xmax": 3.56,
-						"xmin": 3.5
-					}
-				],
-				"word": "forms",
-				"xmax": 3.56,
-				"xmin": 3.22
-			},
-			{
-				"phones": [
-					{
-						"phone": "AH0",
-						"xmax": 3.6,
-						"xmin": 3.56
-					},
-					{
-						"phone": "V",
-						"xmax": 3.7,
-						"xmin": 3.6
-					}
-				],
-				"word": "of",
-				"xmax": 3.7,
-				"xmin": 3.56
-			},
-			{
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 3.71,
-						"xmin": 3.7
-					},
-					{
-						"phone": "Y",
-						"xmax": 3.75,
-						"xmin": 3.71
-					},
-					{
-						"phone": "UW1",
-						"xmax": 3.79,
-						"xmin": 3.75
-					},
-					{
-						"phone": "M",
-						"xmax": 3.83,
-						"xmin": 3.79
-					},
-					{
-						"phone": "AH0",
-						"xmax": 3.86,
-						"xmin": 3.83
-					},
-					{
-						"phone": "N",
-						"xmax": 3.93,
-						"xmin": 3.86
-					}
-				],
-				"word": "human",
-				"xmax": 3.93,
-				"xmin": 3.7
-			},
-			{
-				"phones": [
-					{
-						"phone": "P",
-						"xmax": 4,
-						"xmin": 3.93
-					},
-					{
-						"phone": "AA1",
-						"xmax": 4.12,
-						"xmin": 4
-					},
-					{
-						"phone": "V",
-						"xmax": 4.16,
-						"xmin": 4.12
-					},
-					{
-						"phone": "ER0",
-						"xmax": 4.25,
-						"xmin": 4.16
-					},
-					{
-						"phone": "T",
-						"xmax": 4.31,
-						"xmin": 4.25
-					},
-					{
-						"phone": "IY0",
-						"xmax": 4.53,
-						"xmin": 4.31
-					}
-				],
-				"word": "poverty",
-				"xmax": 4.53,
-				"xmin": 3.93
-			},
-			{
-				"phones": [
-					{
-						"phone": "AE1",
-						"xmax": 4.91,
-						"xmin": 4.83
-					},
-					{
-						"phone": "N",
-						"xmax": 4.94,
-						"xmin": 4.91
-					},
-					{
-						"phone": "D",
-						"xmax": 4.98,
-						"xmin": 4.94
-					}
-				],
-				"word": "and",
-				"xmax": 4.98,
-				"xmin": 4.83
-			},
-			{
-				"phones": [
-					{
-						"phone": "AO1",
-						"xmax": 5.15,
-						"xmin": 4.98
-					},
-					{
-						"phone": "L",
-						"xmax": 5.2,
-						"xmin": 5.15
-					}
-				],
-				"word": "all",
-				"xmax": 5.2,
-				"xmin": 4.98
-			},
-			{
-				"phones": [
-					{
-						"phone": "F",
-						"xmax": 5.27,
-						"xmin": 5.2
-					},
-					{
-						"phone": "AO1",
-						"xmax": 5.3,
-						"xmin": 5.27
-					},
-					{
-						"phone": "R",
-						"xmax": 5.37,
-						"xmin": 5.3
-					},
-					{
-						"phone": "M",
-						"xmax": 5.43,
-						"xmin": 5.37
-					},
-					{
-						"phone": "Z",
-						"xmax": 5.48,
-						"xmin": 5.43
-					}
-				],
-				"word": "forms",
-				"xmax": 5.48,
-				"xmin": 5.2
-			},
-			{
-				"phones": [
-					{
-						"phone": "AH0",
-						"xmax": 5.52,
-						"xmin": 5.48
-					},
-					{
-						"phone": "V",
-						"xmax": 5.62,
-						"xmin": 5.52
-					}
-				],
-				"word": "of",
-				"xmax": 5.62,
-				"xmin": 5.48
-			},
-			{
-				"phones": [
-					{
-						"phone": "HH",
-						"xmax": 5.63,
-						"xmin": 5.62
-					},
-					{
-						"phone": "Y",
-						"xmax": 5.67,
-						"xmin": 5.63
-					},
-					{
-						"phone": "UW1",
-						"xmax": 5.71,
-						"xmin": 5.67
-					},
-					{
-						"phone": "M",
-						"xmax": 5.74,
-						"xmin": 5.71
-					},
-					{
-						"phone": "AH0",
-						"xmax": 5.78,
-						"xmin": 5.74
-					},
-					{
-						"phone": "N",
-						"xmax": 5.86,
-						"xmin": 5.78
-					}
-				],
-				"word": "human",
-				"xmax": 5.86,
-				"xmin": 5.62
-			},
-			{
-				"phones": [
-					{
-						"phone": "L",
-						"xmax": 5.91,
-						"xmin": 5.86
-					},
-					{
-						"phone": "AY1",
-						"xmax": 6.09,
-						"xmin": 5.91
-					},
-					{
-						"phone": "F",
-						"xmax": 6.32,
-						"xmin": 6.09
-					}
-				],
-				"word": "life",
-				"xmax": 6.32,
-				"xmin": 5.86
-			}
-		],
-		[]
-	]
+/* AUDIO CONTROL */
+const playElevenLabsButton = document.getElementById('play-elevenlabs-audio');
+const playYourAudioButton = document.getElementById('play-your-audio');
+const stopAudio = document.getElementById('stop-audio');
+
+playElevenLabsButton.onclick = () => playAudio(chosen_sentence_id, 'bot');
+playYourAudioButton.onclick = () => playAudio(chosen_sentence_id, 'user');
+stopAudio.onclick = () => stopAudioFn();
+
+let highlightedText = "";
+
+function getHighlightedWords() {
+	if (window.getSelection) {
+		highlightedText = window.getSelection().toString().trim();
+	}
+	const words = highlightedText.split(/\s+/);
+	return words;
+
 }
-recordedSentences = [0, 1]
-display(0)*/
+
+function playAudio(sentence_id, type){
+	stopAudio.disabled = false;
+	const words = getHighlightedWords();
+	console.log(words);
+
+	const keyMin = (type === 'bot') ? 'matched_xmin' : 'xmin';
+	const keyMax = (type === 'bot') ? 'matched_xmax' : 'xmax';
+ 
+	let startTime;
+
+	let json_index = 0;
+	let word_index = 0;
+	while (true){
+		if (json_response[sentence_id][json_index]['word'] !== words[word_idx)){
+
+		}
+
+
+		json_index++;
+	}
+
+
+
+	for (const word_idx in words){
+		while (json_response[sentence_id][json_index]['word'] !== words[word_idx]){
+			json_index++;
+		}
+
+		for (const idx = json_index; idx < json_response[sentence_id].length; idx++){
+			if (json_response[sentence_id][idx]['word'] === words[word_idx + idx]){
+				if (startTime === undefined) startTime = json_response[sentence_id][json_index][keyMin];
+				json_index++;
+			} else {
+				startTime = undefined;
+			}
+		}
+	}
+	let endTime = json_response[sentence_id][json_index - 1][keyMax];
+	
+	audioFiles[sentence_id][type].play();
+
+	audio.addEventListener('loadedmetadata', function() {
+		audio.currentTime = startTime;
+	});
+
+	audio.addEventListener('timeupdate', function() {
+	if (audio.currentTime >= endTime) {
+		stopAudioFn();
+	}
+	});
+}
+
+function stopAudioFn(){
+	audio.pause();
+	stopAudio.disabled = true;
+}
+
+
+/*
+valid = 
+{
+	1: [{'matched_xmax': 0.33,
+	'matched_xmin': 0.15,
+	'phones': [{'phone': 'F', 'xmax': 1.13, 'xmin': 1.02},
+			   {'phone': 'ER0', 'xmax': 1.19, 'xmin': 1.13}],
+	'word': 'for',
+	'xmax': 1.19,
+	'xmin': 1.02},
+   {'matched_xmax': 0.6,
+	'matched_xmin': 0.33,
+	'phones': [{'phone': 'M', 'xmax': 1.3, 'xmin': 1.19},
+			   {'phone': 'AE1', 'xmax': 1.46, 'xmin': 1.3},
+			   {'phone': 'N', 'xmax': 1.52, 'xmin': 1.46}],
+	'word': 'man',
+	'xmax': 1.52,
+	'xmin': 1.19},
+   {'matched_xmax': 0.93,
+	'matched_xmin': 0.6,
+	'phones': [{'phone': 'HH', 'xmax': 1.62, 'xmin': 1.52},
+			   {'phone': 'OW1', 'xmax': 1.65, 'xmin': 1.62},
+			   {'phone': 'L', 'xmax': 1.85, 'xmin': 1.65},
+			   {'phone': 'D', 'xmax': 1.9, 'xmin': 1.85},
+			   {'phone': 'Z', 'xmax': 1.94, 'xmin': 1.9}],
+	'word': 'holds',
+	'xmax': 1.94,
+	'xmin': 1.52},
+   {'matched_xmax': 1.01,
+	'matched_xmin': 0.93,
+	'phones': [{'phone': 'IH0', 'xmax': 2.0, 'xmin': 1.94},
+			   {'phone': 'N', 'xmax': 2.05, 'xmin': 2.0}],
+	'word': 'in',
+	'xmax': 2.05,
+	'xmin': 1.94},
+   {'matched_xmax': 1.16,
+	'matched_xmin': 1.01,
+	'phones': [{'phone': 'HH', 'xmax': 2.06, 'xmin': 2.05},
+			   {'ops': ['replace with "IH1"'],
+				'phone': 'IH0',
+				'xmax': 2.1,
+				'xmin': 2.06},
+			   {'phone': 'Z', 'xmax': 2.23, 'xmin': 2.1}],
+	'word': 'his',
+	'xmax': 2.23,
+	'xmin': 2.05},
+   {'matched_phones': [{'phone': 'M', 'xmax': 1.23, 'xmin': 1.16},
+					   {'phone': 'AO1', 'xmax': 1.27, 'xmin': 1.23},
+					   {'phone': 'R', 'xmax': 1.33, 'xmin': 1.27},
+					   {'phone': 'T', 'xmax': 1.36, 'xmin': 1.33},
+					   {'phone': 'AH0', 'xmax': 1.42, 'xmin': 1.36},
+					   {'phone': 'L', 'xmax': 1.48, 'xmin': 1.42}],
+	'matched_xmax': 1.48,
+	'matched_xmin': 1.16,
+	'ops': ['replace with "mortal"'],
+	'phones': [{'ops': ['insert a "M"', 'replace with "AO1"'],
+				'phone': 'HH',
+				'xmax': 2.29,
+				'xmin': 2.23},
+			   {'ops': ['replace with "R"'],
+				'phone': 'OW0',
+				'xmax': 2.37,
+				'xmin': 2.29},
+			   {'phone': 'T', 'xmax': 2.49, 'xmin': 2.37},
+			   {'ops': ['replace with "AH0"'],
+				'phone': 'EH1',
+				'xmax': 2.56,
+				'xmin': 2.49},
+			   {'phone': 'L', 'xmax': 2.73, 'xmin': 2.56}],
+	'word': 'hotel',
+	'xmax': 2.73,
+	'xmin': 2.23},
+   {'matched_xmax': 1.95,
+	'matched_xmin': 1.48,
+	'phones': [{'phone': 'HH', 'xmax': 2.74, 'xmin': 2.73},
+			   {'phone': 'AE1', 'xmax': 2.95, 'xmin': 2.74},
+			   {'phone': 'N', 'xmax': 3.05, 'xmin': 2.95},
+			   {'ops': ['insert a "D"'],
+				'phone': 'Z',
+				'xmax': 3.27,
+				'xmin': 3.05}],
+	'word': 'hands',
+	'xmax': 3.27,
+	'xmin': 2.73},
+   {'matched_xmax': 2.02,
+	'matched_xmin': 1.95,
+	'phones': [{'phone': 'DH', 'xmax': 3.34, 'xmin': 3.32},
+			   {'phone': 'AH0', 'xmax': 3.38, 'xmin': 3.34}],
+	'word': 'the',
+	'xmax': 3.38,
+	'xmin': 3.32},
+   {'matched_xmax': 2.39,
+	'matched_xmin': 2.02,
+	'phones': [{'phone': 'P', 'xmax': 3.52, 'xmin': 3.38},
+			   {'phone': 'AW1', 'xmax': 3.67, 'xmin': 3.52},
+			   {'phone': 'ER0', 'xmax': 3.74, 'xmin': 3.67}],
+	'word': 'power',
+	'xmax': 3.74,
+	'xmin': 3.38},
+   {'matched_xmax': 2.54,
+	'matched_xmin': 2.39,
+	'phones': [{'phone': 'T', 'xmax': 3.83, 'xmin': 3.74},
+			   {'ops': ['replace with "UW1"'],
+				'phone': 'AH0',
+				'xmax': 3.9,
+				'xmin': 3.83}],
+	'word': 'to',
+	'xmax': 3.9,
+	'xmin': 3.74},
+   {'matched_xmax': 2.95,
+	'matched_xmin': 2.54,
+	'phones': [{'phone': 'AH0', 'xmax': 3.96, 'xmin': 3.9},
+			   {'phone': 'B', 'xmax': 4.07, 'xmin': 3.96},
+			   {'phone': 'AA1', 'xmax': 4.18, 'xmin': 4.07},
+			   {'phone': 'L', 'xmax': 4.27, 'xmin': 4.18},
+			   {'phone': 'IH0', 'xmax': 4.32, 'xmin': 4.27},
+			   {'phone': 'SH', 'xmax': 4.42, 'xmin': 4.32}],
+	'word': 'abolish',
+	'xmax': 4.42,
+	'xmin': 3.9},
+   {'matched_xmax': 3.15,
+	'matched_xmin': 2.95,
+	'phones': [{'phone': 'AO1', 'xmax': 4.52, 'xmin': 4.42},
+			   {'phone': 'L', 'xmax': 4.66, 'xmin': 4.52}],
+	'word': 'all',
+	'xmax': 4.66,
+	'xmin': 4.42},
+   {'matched_xmax': 3.45,
+	'matched_xmin': 3.15,
+	'phones': [{'phone': 'F', 'xmax': 4.79, 'xmin': 4.66},
+			   {'phone': 'AO1', 'xmax': 4.88, 'xmin': 4.79},
+			   {'phone': 'R', 'xmax': 4.97, 'xmin': 4.88},
+			   {'phone': 'M', 'xmax': 5.06, 'xmin': 4.97},
+			   {'phone': 'Z', 'xmax': 5.16, 'xmin': 5.06}],
+	'word': 'forms',
+	'xmax': 5.16,
+	'xmin': 4.66},
+   {'matched_xmax': 3.6,
+	'matched_xmin': 3.45,
+	'phones': [{'phone': 'AH0', 'xmax': 5.26, 'xmin': 5.16},
+			   {'phone': 'V', 'xmax': 5.4, 'xmin': 5.26}],
+	'word': 'of',
+	'xmax': 5.4,
+	'xmin': 5.16},
+   {'matched_phones': [{'phone': 'P', 'xmax': 3.87, 'xmin': 3.79},
+					   {'phone': 'AA1', 'xmax': 3.99, 'xmin': 3.87},
+					   {'phone': 'V', 'xmax': 4.03, 'xmin': 3.99},
+					   {'phone': 'ER0', 'xmax': 4.1, 'xmin': 4.03},
+					   {'phone': 'T', 'xmax': 4.13, 'xmin': 4.1},
+					   {'phone': 'IY0', 'xmax': 4.27, 'xmin': 4.13}],
+	'matched_xmax': 4.27,
+	'matched_xmin': 3.79,
+	'ops': ['swap with "human"'],
+	'phones': [{'phone': 'P', 'xmax': 5.53, 'xmin': 5.4},
+			   {'phone': 'AA1', 'xmax': 5.63, 'xmin': 5.53},
+			   {'phone': 'V', 'xmax': 5.66, 'xmin': 5.63},
+			   {'phone': 'ER0', 'xmax': 5.77, 'xmin': 5.66},
+			   {'phone': 'T', 'xmax': 5.86, 'xmin': 5.77},
+			   {'phone': 'IY0', 'xmax': 5.96, 'xmin': 5.86}],
+	'word': 'poverty',
+	'xmax': 5.96,
+	'xmin': 5.4},
+   {'matched_phones': [{'phone': 'HH', 'xmax': 3.61, 'xmin': 3.6},
+					   {'phone': 'Y', 'xmax': 3.64, 'xmin': 3.61},
+					   {'phone': 'UW1', 'xmax': 3.67, 'xmin': 3.64},
+					   {'phone': 'M', 'xmax': 3.7, 'xmin': 3.67},
+					   {'phone': 'AH0', 'xmax': 3.75, 'xmin': 3.7},
+					   {'phone': 'N', 'xmax': 3.79, 'xmin': 3.75}],
+	'matched_xmax': 3.79,
+	'matched_xmin': 3.6,
+	'ops': ['swap with "poverty"'],
+	'phones': [{'phone': 'HH', 'xmax': 6.06, 'xmin': 5.96},
+			   {'phone': 'Y', 'xmax': 6.11, 'xmin': 6.06},
+			   {'phone': 'UW1', 'xmax': 6.21, 'xmin': 6.11},
+			   {'phone': 'M', 'xmax': 6.28, 'xmin': 6.21},
+			   {'phone': 'AH0', 'xmax': 6.31, 'xmin': 6.28},
+			   {'phone': 'N', 'xmax': 6.5, 'xmin': 6.31},
+			   {'ops': ['delete "Z"'], 'phone': 'Z', 'xmax': 6.65, 'xmin': 6.5}],
+	'word': 'human',
+	'xmax': 6.65,
+	'xmin': 5.96},
+   {'matched_xmax': 4.42,
+	'matched_xmin': 4.27,
+	'phones': [{'phone': 'AE1', 'xmax': 7.14, 'xmin': 7.06},
+			   {'phone': 'N', 'xmax': 7.18, 'xmin': 7.14},
+			   {'phone': 'D', 'xmax': 7.21, 'xmin': 7.18}],
+	'word': 'and',
+	'xmax': 7.21,
+	'xmin': 7.06},
+   {'matched_xmax': 4.62,
+	'matched_xmin': 4.42,
+	'phones': [{'phone': 'AO1', 'xmax': 7.29, 'xmin': 7.21},
+			   {'phone': 'L', 'xmax': 7.43, 'xmin': 7.29}],
+	'word': 'all',
+	'xmax': 7.43,
+	'xmin': 7.21},
+   {'matched_xmax': 4.97,
+	'matched_xmin': 4.62,
+	'phones': [{'phone': 'F', 'xmax': 7.55, 'xmin': 7.43},
+			   {'phone': 'AO1', 'xmax': 7.62, 'xmin': 7.55},
+			   {'phone': 'R', 'xmax': 7.69, 'xmin': 7.62},
+			   {'phone': 'M', 'xmax': 7.76, 'xmin': 7.69},
+			   {'phone': 'Z', 'xmax': 7.83, 'xmin': 7.76}],
+	'word': 'forms',
+	'xmax': 7.83,
+	'xmin': 7.43},
+   {'matched_xmax': 5.13,
+	'matched_xmin': 4.97,
+	'phones': [{'phone': 'AH0', 'xmax': 7.89, 'xmin': 7.83},
+			   {'phone': 'V', 'xmax': 8.0, 'xmin': 7.89}],
+	'word': 'of',
+	'xmax': 8.0,
+	'xmin': 7.83},
+   {'matched_xmax': 5.36,
+	'matched_xmin': 5.13,
+	'phones': [{'phone': 'HH', 'xmax': 8.01, 'xmin': 8.0},
+			   {'phone': 'Y', 'xmax': 8.05, 'xmin': 8.01},
+			   {'phone': 'UW1', 'xmax': 8.1, 'xmin': 8.05},
+			   {'phone': 'M', 'xmax': 8.16, 'xmin': 8.1},
+			   {'phone': 'AH0', 'xmax': 8.21, 'xmin': 8.16},
+			   {'phone': 'N', 'xmax': 8.28, 'xmin': 8.21}],
+	'word': 'human',
+	'xmax': 8.28,
+	'xmin': 8.0},
+   {'matched_xmax': 5.86,
+	'matched_xmin': 5.36,
+	'phones': [{'phone': 'L', 'xmax': 8.35, 'xmin': 8.28},
+			   {'phone': 'AY1', 'xmax': 8.47, 'xmin': 8.35},
+			   {'phone': 'F', 'xmax': 8.61, 'xmin': 8.47}],
+	'word': 'life',
+	'xmax': 8.61,
+	'xmin': 8.28}]
+
+}
+
+
+
+recordedSentences = [1]
+display(1) */

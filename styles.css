@@ -210,6 +210,7 @@ i.fas {
 
 #sentence-container{
     align-items: center;
+    justify-content: center;
     width: 60%;
     margin: auto;
     border: 5px solid #ddd;
@@ -217,12 +218,50 @@ i.fas {
 }
 
 #sentence {
-    font-size: 20px;
+    font-size: 28px;
     width: 60%;
+    align-items: center;
+    margin: auto;
 
     padding: 0px;
     padding-top: 5px;
     overflow: auto;
     overflow:auto;
-    padding-right: 30px;
+}
+
+#phones{
+    font-size: 24px;
+    width: 60%;
+    align-items: center;
+    margin: auto;
+
+    padding: 0px;
+    padding-top: 5px;
+    overflow: auto;
+    overflow:auto;
+}
+
+/* Tooltip style */
+#tooltip {
+    display: none;
+    position: absolute;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    padding: 5px;
+    border-radius: 6px;
+    z-index: 1;
+}
+
+#buttons {
+    align-items: center;
+    display: table;
+    margin: 0 auto;
+    padding: 10px;
+    width: 60%;
+}
+
+#buttons button {
+    margin: 0 10px;
+
 }
