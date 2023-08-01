@@ -204,6 +204,7 @@ const scenarios = [
 ]
 
 /****  Chat Logs ****/
+let roleplay_audio = null;
 class ChatLogs {
     constructor() {
         this.loading_assistant_msg = false;
@@ -256,8 +257,11 @@ class ChatLogs {
         const res = await response(messages);
         const audioBlob = await textToSpeech(res, scenarios[scenario_id].voice_id); // wait for tts to start
         const url = window.URL.createObjectURL(audioBlob);
-        audio = new Audio(url);
-		audio.play();
+        roleplay_audio = new Audio(url);
+		roleplay_audio.play();
+		roleplay_audio.onended = () => {
+			roleplay_audio = null;
+		};
 
         this.loading_assistant_msg = false;
         this.handleMessage(scenario_id, 'from-bot', res,  false);
@@ -265,7 +269,7 @@ class ChatLogs {
 
     // Handles message from user
     handleMessage(scenario_id, sender, content, get_response=true){
-        if (audio && get_response) audio.pause();
+        if (roleplay_audio && get_response) roleplay_audio.pause();
         chat_logs.loading_user_msg = false;
         let message = {
             sender, content,
@@ -432,7 +436,7 @@ finishScenarioButton.addEventListener('click', () => {
     let h4 = document.createElement("h4");
     h4.textContent = "NOTES:\n";
     notesElem.appendChild(h4);
-    if (audio) audio.pause();
+    if (roleplay_audio) roleplay_audio.pause();
 
     chat_logs.getChatLog(scenario_id).forEach(async (message) => {
         if (message.sender == "from-me"){
