@@ -6,6 +6,8 @@
 [![MIT License][license-shield]][license-url]
 
 ## 🤔 What is this?
+This project was created for LabLab.ai's ElevenLabs hackathon. [Project Video](https://lablab.ai/event/eleven-labs-ai-hackathon/phomemes/languagelearner)
+
 A tool for language learning. 
 
 It is a static webpage with two main modes:
