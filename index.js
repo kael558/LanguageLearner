@@ -1,18 +1,11 @@
-/*** KEYS ****/
 
-
-/**** PROMPTS ****/
-
-
-
-
+const base_url = 'https://timothyleavens8-532gnmr91xsdca39.socketxp.com';
+//const base_url = 'http://localhost:5000';
 
 /****  API HANDLING ****/
-// TODO handle streaming response
-
 async function textToSpeech(text, voice_id='21m00Tcm4TlvDq8ikWAM'){
     try {
-        const res = await fetch('http://localhost:5000/tts', {
+        const res = await fetch(base_url + '/tts', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -32,7 +25,7 @@ async function textToSpeech(text, voice_id='21m00Tcm4TlvDq8ikWAM'){
 
 async function response(messages){
     try {
-        const res = await fetch(`http://localhost:5000/completions`, {
+        const res = await fetch(base_url + '/completions', {
             method: 'POST',
             headers: {  
                 'Content-Type': 'application/json'
@@ -64,7 +57,7 @@ async function transcribe(audioData, sentence_id=false, prompt = '', language = 
     return new Promise((resolve, reject) => {
         reader.onloadend = async function() {
             // Send base64 string data backend service
-            const res = await fetch('http://localhost:5000/whisper', {
+            const res = await fetch(base_url + '/whisper', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -85,7 +78,7 @@ async function transcribe(audioData, sentence_id=false, prompt = '', language = 
 
 let audioFiles = {};
 
-async function sentence_api(audioData, sentence_id, sentence, voice_id='21m00Tcm4TlvDq8ikWAM') { 
+async function sentence_api(audioData, sentence_id, sentence, voice_id='HuFo09UJYjOyXsaRZZBk') { 
 	if (!audioFiles[sentence_id]) audioFiles[sentence_id] = {};
 	audioFiles[sentence_id]['user'] = new Audio(window.URL.createObjectURL(audioData));
 
@@ -100,7 +93,7 @@ async function sentence_api(audioData, sentence_id, sentence, voice_id='21m00Tcm
 
             botAudioReader.onloadend = async function() {
                 // Send base64 string data backend service
-                const res = await fetch('http://localhost:5000/sentence', {
+                const res = await fetch(base_url + '/sentence', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -140,7 +133,7 @@ async function sentence_api(audioData, sentence_id, sentence, voice_id='21m00Tcm
 async function finish(sentence_ids) {
 
     try {
-        const res = await fetch(`http://localhost:5000/finish`, {
+        const res = await fetch(base_url + '/finish', {
             method: 'POST',
             headers: {  
                 'Content-Type': 'application/json'
@@ -540,7 +533,7 @@ document.querySelector('#chat-input-field').addEventListener('keydown', (event) 
 
 /* Sentence HTML stuff */
 let sentences = [
-    {
+    /*{
         "name": "JFK's inaugural address",
         "sentences":  [
             "The world is very different now",
@@ -552,6 +545,21 @@ let sentences = [
             "born in this century, tempered by war, disciplined by a hard and bitter peace, proud of our ancient heritage",
             "and unwilling to witness or permit the slow undoing of those human rights to which this nation has always been committed",
             "and to which we are committed today at home and around the world"
+        ]
+    },*/
+    {
+        "name": "Japanese poem by ChatGPT",
+        "sentences": [
+            "月明かり",
+            "夜空に舞い踊る",
+            "星々は遠く",
+            "心に寄り添う",
+            "花咲く",
+            "春の風に乗り",
+            "笑顔で",
+            "世界が明るく",
+            "愛と和",
+            "永遠の誓い"
         ]
     }
 ]
@@ -809,6 +817,13 @@ function stopAudioFn(){
 	stopAudio.disabled = true;
 }
 
+
+/*valid = {0 :
+[{'word': '夜', 'xmin': 0.77, 'xmax': 0.97, 'phones': [{'phone': 'j', 'xmin': 0.77, 'xmax': 0.9}, {'phone': 'o', 'xmin': 0.9, 'xmax': 0.93}, {'phone': 'ɾ', 'xmin': 0.93, 'xmax': 0.96}, {'phone': 'ɯ', 'xmin': 0.96, 'xmax': 0.97}], 'matched_xmin': 0.17, 'matched_xmax': 0.36}, {'word': '露', 'xmin': 0.97, 'xmax': 1.15, 'phones': [{'phone': 'ts', 'xmin': 0.97, 'xmax': 1.05, 'ops': ['replace with "k"']}, {'phone': 'ɨ', 'xmin': 1.05, 'xmax': 1.08, 'ops': ['replace with "a"']}, {'phone': 'j', 'xmin': 1.08, 'xmax': 1.11, 'ops': ['replace with "ɾ"']}, {'phone': 'ɨ', 'xmin': 1.11, 'xmax': 1.15, 'ops': ['replace with "a"']}], 'ops': ['replace with "空"'], 'matched_phones': [{'phone': 'k', 'xmin': 0.36, 'xmax': 0.49}, {'phone': 'a', 'xmin': 0.49, 'xmax': 0.53}, {'phone': 'ɾ', 'xmin': 0.53, 'xmax': 0.56}, {'phone': 'a', 'xmin': 0.56, 'xmax': 0.61}], 'matched_xmin': 0.36, 'matched_xmax': 0.61}, {'word': 'に', 'xmin': 1.15, 'xmax': 1.24, 'phones': [{'phone': 'ɲ', 'xmin': 1.15, 'xmax': 1.21}, {'phone': 'i', 'xmin': 1.21, 'xmax': 1.24}], 'matched_xmin': 0.61, 'matched_xmax': 0.77}, {'word': '舞', 'xmin': 1.24, 'xmax': 1.32, 'phones': [{'phone': 'm', 'xmin': 1.24, 'xmax': 1.27}, {'phone': 'a', 'xmin': 1.27, 'xmax': 1.31}, {'phone': 'ɯ', 'xmin': 1.31, 'xmax': 1.32, 'ops': ['replace with "i"']}], 'matched_xmin': 0.77, 'matched_xmax': 0.98}, {'word': 'い', 'xmin': 1.32, 'xmax': 1.35, 'phones': [{'phone': 'i', 'xmin': 1.32, 'xmax': 1.35}], 'matched_xmin': 0.98, 'matched_xmax': 1.01}, {'word': '踊', 'xmin': 1.35, 'xmax': 2.7, 'phones': [{'phone': 'spn', 'xmin': 1.35, 'xmax': 2.7}], 'matched_xmin': 1.01, 'matched_xmax': 1.51}, {'word': 'る', 'xmin': 2.7, 'xmax': 2.76, 'phones': [{'phone': 'ɾ', 'xmin': 2.7, 'xmax': 2.73}, {'phone': 'ɯ', 'xmin': 2.73, 'xmax': 2.76}], 'matched_xmin': 1.51, 'matched_xmax': 1.569683}]
+}
+
+recordedSentences = [0]
+display(0)*/
 
 /*
 valid = 
